@@ -33,6 +33,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "eeprom_layout.h"
 #include "PrefHandler.h"
 #include "Sys_Messages.h"
+#include "FaultHandler.h"
 
 /*
  * A abstract class to hold device configuration. It is to be accessed
@@ -56,6 +57,7 @@ public:
 	void handleTick();
 	bool isEnabled();
 	virtual uint32_t getTickInterval();
+	char* getCommonName();
 
 	virtual void loadConfiguration();
 	virtual void saveConfiguration();
@@ -64,6 +66,7 @@ public:
 
 protected:
 	PrefHandler *prefsHandler;
+	char *commonName;
 
 private:
 	DeviceConfiguration *deviceConfiguration; // reference to the currently active configuration

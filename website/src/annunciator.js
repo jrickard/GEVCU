@@ -6,14 +6,14 @@ var FieldClass = {
 };
 
 var Status = { /* statusBitfield1 */
-	motorModelLimitation		: 1 << 0,
-	mechanicalPowerLimitation	: 1 << 1,
-	maxTorqueLimitation			: 1 << 2,
-	acCurrentLimitation			: 1 << 3,
-	temperatureLimitation		: 1 << 4,
-	speedLimitation				: 1 << 5,
-	voltageLimitation			: 1 << 6,
-	currentLimitation			: 1 << 7,
+	out0		: 1 << 0,
+	out1		: 1 << 1,
+	out2		: 1 << 2,
+	out3		: 1 << 3,
+	out4		: 1 << 4,
+	out5		: 1 << 5,
+	out6		: 1 << 6,
+	out7		: 1 << 7,
 	torqueLimitation			: 1 << 8,
 	errorFlag					: 1 << 9,
 	warningFlag					: 1 << 10,
@@ -24,16 +24,20 @@ var Status = { /* statusBitfield1 */
 };
 
 var Warning = { /* statusBitfield2 */
-	systemCheckActive					: 1 << 0,
-	externalShutdownPathAw2Off			: 1 << 1,
-	externalShutdownPathAw1Off			: 1 << 2,
-	oscillationLimitControllerActive	: 1 << 3,
+	din0								: 1 << 0,
+	din1								: 1 << 1,
+	din2								: 1 << 2,
+	din3								: 1 << 3,
 	driverShutdownPathActive			: 1 << 10,
 	powerMismatchDetected				: 1 << 11,
 	speedSensorSignal					: 1 << 12,
 	hvUndervoltage						: 1 << 13,
 	maximumModulationLimiter			: 1 << 14,
 	temperatureSensor					: 1 << 15,
+	res1								: 1 << 16,
+	res2								: 1 << 17,
+	res3								: 1 << 18,
+	res4								: 1 << 19
 };
 
 var Error = { /* statusBitfield3 */
@@ -69,14 +73,14 @@ var Error = { /* statusBitfield3 */
 function updateAnnunciatorFields(name, bitfield) {
 	switch (name) {
 	case 'bitfield1':
-		updateField("motorModelLimitation", FieldClass.warn, bitfield & Status.motorModelLimitation);
-		updateField("mechanicalPowerLimitation", FieldClass.warn, bitfield & Status.mechanicalPowerLimitation);
-		updateField("maxTorqueLimitation", FieldClass.warn, bitfield & Status.maxTorqueLimitation);
-		updateField("acCurrentLimitation", FieldClass.warn, bitfield & Status.acCurrentLimitation);
-		updateField("temperatureLimitation", FieldClass.warn, bitfield & Status.temperatureLimitation);
-		updateField("speedLimitation", FieldClass.warn, bitfield & Status.speedLimitation);
-		updateField("voltageLimitation", FieldClass.warn, bitfield & Status.voltageLimitation);
-		updateField("currentLimitation", FieldClass.warn, bitfield & Status.currentLimitation);
+		updateField("out0", FieldClass.ok, bitfield & Status.out0);
+		updateField("out1", FieldClass.ok, bitfield & Status.out1);
+		updateField("out2", FieldClass.ok, bitfield & Status.out2);
+		updateField("out3", FieldClass.ok, bitfield & Status.out3);
+		updateField("out4", FieldClass.ok, bitfield & Status.out4);
+		updateField("out5", FieldClass.ok, bitfield & Status.out5);
+		updateField("out6", FieldClass.ok, bitfield & Status.out6);
+		updateField("out7", FieldClass.ok, bitfield & Status.out7);
 		updateField("torqueLimitation", FieldClass.warn, bitfield & Status.torqueLimitation);
 		updateField("errorFlag", FieldClass.error, bitfield & Status.errorFlag);
 		updateField("warningFlag", FieldClass.warn, bitfield & Status.warningFlag);
@@ -86,16 +90,20 @@ function updateAnnunciatorFields(name, bitfield) {
 		updateField("stateReady", FieldClass.ok, bitfield & Status.stateReady);
 		break;
 	case 'bitfield2':
-		updateField("systemCheckActive", FieldClass.warn, bitfield & Warning.systemCheckActive);
-		updateField("externalShutdownPathAw2Off", FieldClass.warn, bitfield & Warning.externalShutdownPathAw2Off);
-		updateField("externalShutdownPathAw1Off", FieldClass.warn, bitfield & Warning.externalShutdownPathAw1Off);
-		updateField("oscillationLimitControllerActive", FieldClass.ok, bitfield & Warning.oscillationLimitControllerActive);
+		updateField("din0", FieldClass.ok, bitfield & Warning.din0);
+		updateField("din1", FieldClass.ok, bitfield & Warning.din1);
+		updateField("din2", FieldClass.ok, bitfield & Warning.din2);
+		updateField("din3", FieldClass.ok, bitfield & Warning.din3);
 		updateField("driverShutdownPathActive", FieldClass.warn, bitfield & Warning.driverShutdownPathActive);
 		updateField("powerMismatchDetected", FieldClass.warn, bitfield & Warning.powerMismatchDetected);
 		updateField("speedSensorSignal", FieldClass.warn, bitfield & Warning.speedSensorSignal);
 		updateField("hvUndervoltage", FieldClass.warn, bitfield & Warning.hvUndervoltage);
 		updateField("maximumModulationLimiter", FieldClass.warn, bitfield & Warning.maximumModulationLimiter);
 		updateField("temperatureSensor", FieldClass.warn, bitfield & Warning.temperatureSensor);
+		updateField("res1", FieldClass.ok, bitfield & Warning.res1);
+		updateField("res2", FieldClass.ok, bitfield & Warning.res2);
+		updateField("res3", FieldClass.ok, bitfield & Warning.res3);
+		updateField("res4", FieldClass.ok, bitfield & Warning.res4);
 		break;
 	case 'bitfield3':
 		updateField("speedSensorSupply", FieldClass.error, bitfield & Error.speedSensorSupply);

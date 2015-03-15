@@ -70,28 +70,22 @@ the end of the stardard data. The below numbers are offsets from the device's ee
 //Motor controller data
 #define EEMC_MAX_RPM			20 //2 bytes, unsigned int for maximum allowable RPM
 #define EEMC_MAX_TORQUE			22 //2 bytes, unsigned int - maximum torque in tenths of a Nm
-//#define EEMC_ACTIVE_HIGH		24  //1 byte - bitfield - each bit corresponds to whether a given signal is active high (1) or low (0)
-									// bit:		function:
-									// 0		Drive enable
-									// 1		Gear Select - Park/Neutral
-									// 2		Gear Select - Forward
-									// 3		Gear Select - Reverse
-//#define EEMC_LIMP_SCALE			25 //1 byte - percentage of power to allow during limp mode
-//#define EEMC_MAX_REGEN			26 //1 byte - percentage of max torque to apply to regen
-//#define EEMC_REGEN_SCALE		28 //1 byte - percentage - reduces all regen related values (throttle, brake, maximum above)
-#define EEMC_PRECHARGE_RELAY	29 //1 byte - 255 = no precharge relay 0-3 = yes, there is one (and the output is the number stored)
-#define EEMC_CONTACTOR_RELAY	30 //1 byte - 255 = no contactor relay 0-3 = yes there is
-//#define EEMC_COOLING			31 //1 byte - set point in C for starting up cooling relay
-//#define EEMC_MIN_TEMP_MOTOR		32 //2 bytes - signed int - Smallest value on temp gauge (1% PWM output)
-//#define EEMC_MAX_TEMP_MOTOR		34 //2 bytes - signed int - Highest value on temp gauge (99% PWM output)
-//#define EEMC_MIN_TEMP_INV		36 //2 bytes - signed int - Smallest value on temp gauge (1% PWM output)
-//#define EEMC_MAX_TEMP_INV		38 //2 bytes - signed int - Highest value on temp gauge (99% PWM output)
-#define EEMC_PRECHARGE_C		40 //2 bytes - capacitance of controller capacitor bank in micro farads (uf) - set to zero to disable RC precharge
-#define EEMC_PRECHARGE_R		42 //2 bytes - Resistance of precharge resistor in tenths of an ohm
-#define EEMC_NOMINAL_V			44 //2 bytes - nominal system voltage to expect (in tenths of a volt)
-#define EEMC_REVERSE_LIMIT		46 //2 bytes - a percentage to knock the requested torque down by while in reverse.
-#define EEMC_RPM_SLEW_RATE		48 //2 bytes - slew rate (rpm/sec) at which speed should change (only in speed mode)
-#define EEMC_TORQUE_SLEW_RATE	50 //2 bytes - slew rate (0.1Nm/sec) at which the torque should change
+#define EEMC_PRECHARGE_RELAY	24 //1 byte - 255 = no precharge relay 0-3 = yes, there is one (and the output is the number stored)
+#define EEMC_CONTACTOR_RELAY	25 //1 byte - 255 = no contactor relay 0-3 = yes there is
+#define EEMC_COOL_FAN			26 //1 byte output controlling external cooling relay
+#define EEMC_COOL_ON	  		27 //1 bytes temperature at which external cooling is switched on
+#define EEMC_COOL_OFF			28 //1 byte temperature at which external cooling is switched off
+#define EEMC_KILOWATTHRS		29 //4 bytes - capacitance of controller capacitor bank in micro farads (uf) - set to zero to disable RC precharge
+#define EEMC_PRECHARGE_R		33 //2 bytes - Resistance of precharge resistor in tenths of an ohm
+#define EEMC_NOMINAL_V			35 //2 bytes - nominal system voltage to expect (in tenths of a volt)
+#define EEMC_REVERSE_LIMIT		37 //2 bytes - a percentage to knock the requested torque down by while in reverse.
+#define EEMC_RPM_SLEW_RATE		39 //2 bytes - slew rate (rpm/sec) at which speed should change (only in speed mode)
+#define EEMC_TORQUE_SLEW_RATE	41 //2 bytes - slew rate (0.1Nm/sec) at which the torque should change
+#define EEMC_BRAKE_LIGHT        42
+#define EEMC_REV_LIGHT			43
+#define EEMC_ENABLE_IN			44
+#define EEMC_REVERSE_IN			45
+#define EEMC_MOTOR_MODE			46
 
 //throttle data
 #define EETH_MIN_ONE			20 //2 bytes - ADC value of minimum value for first channel
@@ -112,6 +106,8 @@ the end of the stardard data. The below numbers are offsets from the device's ee
 #define EETH_REGEN_MAX	        48 //2 bytes - unsigned int - tenths of a percent (0-1000) of pedal position where regen is at maximum
 #define EETH_CREEP		        50 //2 bytes - percentage of throttle used to simulate creep
 #define EETH_CAR_TYPE			52 //1 byte - type of car for querying the throttle position via CAN bus
+#define EETH_ADC_1				53 //1 byte - which ADC port to use for first throttle input
+#define EETH_ADC_2				54 //1 byte - which ADC port to use for second throttle input
 
 //System Data
 #define EESYS_SYSTEM_TYPE        10  //1 byte - 1 = Old school protoboards 2 = GEVCU2/DUED 3 = GEVCU3 - Defaults to 2 if invalid or not set up
@@ -191,9 +187,16 @@ the end of the stardard data. The below numbers are offsets from the device's ee
 #define EESYS_WIFIX_KEY         618 //40 bytes - the security key (13 bytes for WEP, 8 - 83 for WPA but only up to 40 here
 
 #define EESYS_LOG_LEVEL         658 //1 byte - the log level
-#define EESYS_COOLFAN			659 //1 byte - Digital output to turn on for cooling
-#define EESYS_COOLON			660 //1 byte - when to start cooling - degrees C
-#define EESYS_COOLOFF			661 //1 byte - when to stop cooling - degrees C
+#define EESYS_AMPHOURS			659 //1 byte - ???
+#define EESYS_BRAKELIGHT		660 //1 byte - 
+#define EESYS_xxxx				661 //1 byte -
+
+#define EEFAULT_VALID			0 //1 byte - Set to value of 0xB2 if fault data has been initialized
+#define EEFAULT_READPTR			1 //2 bytes - index where reading should start (first unacknowledged fault)
+#define EEFAULT_WRITEPTR		3 //2 bytes - index where writing should occur for new faults
+#define EEFAULT_RUNTIME			5 //4 bytes - stores the number of seconds (in tenths) that the system has been turned on for - total time ever
+#define EEFAULT_FAULTS_START	10 //a bunch of faults stored one after the other start at this location
+
 
 #endif
 

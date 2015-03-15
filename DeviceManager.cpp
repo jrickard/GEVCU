@@ -72,6 +72,7 @@ void DeviceManager::addDevice(Device *device) {
 			Logger::error("unable to register device, max number of devices reached.");
 		}
 	}
+	/*
 	switch (device->getType()) {
 	case DEVICE_THROTTLE:
 		throttle = (Throttle *) device;
@@ -83,6 +84,7 @@ void DeviceManager::addDevice(Device *device) {
 		motorController = (MotorController *) device;
 		break;
 	}
+	*/
 }
 
 /*
@@ -134,7 +136,7 @@ void DeviceManager::sendMessage(DeviceType devType, DeviceId devId, uint32_t msg
 {
 	for (int i = 0; i < CFG_DEV_MGR_MAX_DEVICES; i++)
 	{
-		if (devices[i]) //does this object even exist?
+		if (devices[i] && devices[i]->isEnabled()) //does this object exist and is it enabled?
 		{
 			if (devType == DEVICE_ANY || devType == devices[i]->getType())
 			{
@@ -180,6 +182,9 @@ uint8_t DeviceManager::getNumDisplays() {
 }
 
 Throttle *DeviceManager::getAccelerator() {
+	//try to find one if nothing registered. Cache it if we find one
+	if (!throttle) throttle = (Throttle *)getDeviceByType(DEVICE_THROTTLE); 
+
 	//if there is no throttle then instantiate a dummy throttle
 	//so down range code doesn't puke
 	if (!throttle) 
@@ -191,6 +196,9 @@ Throttle *DeviceManager::getAccelerator() {
 }
 
 Throttle *DeviceManager::getBrake() {
+
+	if (!brake) brake = (Throttle *)getDeviceByType(DEVICE_BRAKE);
+
 	if (!brake) 
 	{
 		//Logger::debug("getBrake() called but there is no registered brake!");
@@ -200,6 +208,8 @@ Throttle *DeviceManager::getBrake() {
 }
 
 MotorController *DeviceManager::getMotorController() {
+	if (!motorController) motorController = (MotorController *)getDeviceByType(DEVICE_MOTORCTRL);
+
 	if (!motorController) 
 	{
 		Logger::debug("getMotorController() called but there is no registered motor controller!");
@@ -234,7 +244,7 @@ Device *DeviceManager::getDeviceByType(DeviceType type)
 {
 	for (int i = 0; i < CFG_DEV_MGR_MAX_DEVICES; i++)
 	{
-		if (devices[i]) 
+		if (devices[i] && devices[i]->isEnabled()) 
 		{
 			if (devices[i]->getType() == type) return devices[i];
 		}
@@ -266,3 +276,56 @@ uint8_t DeviceManager::countDeviceType(DeviceType deviceType) {
 	}
 	return count;
 }
+
+void DeviceManager::printDeviceList() {
+	Logger::console("Currently enabled devices: (DISABLE= to disable)");
+	for (int i = 0; i < CFG_DEV_MGR_MAX_DEVICES; i++) {
+		if (devices[i] && devices[i]->isEnabled()) {
+			Logger::console("     %X     %s", devices[i]->getId(), devices[i]->getCommonName());
+		}	
+	}
+
+	Logger::console("Currently disabled devices: (ENABLE= to enable)");
+	for (int i = 0; i < CFG_DEV_MGR_MAX_DEVICES; i++) {
+		if (devices[i] && !devices[i]->isEnabled()) {
+			Logger::console("     %X     %s", devices[i]->getId(), devices[i]->getCommonName());
+		}	
+	}
+}
+
+
+void DeviceManager::updateWifi() {
+  
+        sendMessage(DEVICE_WIFI, ICHIP2128, MSG_CONFIG_CHANGE, NULL);  //Load all our other parameters first
+        
+        char param [2][20];  //A two element array containing id and enable state
+        char *paramPtr[2] = { &param[0][0], &param[1][0] }; //A two element array of pointers, pointing to the addresses of row 1 and row 2 of array.
+                                                            //paramPtr[0] then contains address of param row 0 element 0
+                                                            //paramPtr[1] then contains address of param row 1 element 0.
+
+	
+        for (int i = 0; i < CFG_DEV_MGR_MAX_DEVICES; i++) { //Find all devices that are enabled and load into array
+		if (devices[i] && devices[i]->isEnabled()) 
+                  {                
+                    sprintf(paramPtr[0],"x%X",devices[i]->getId());
+                    sprintf(paramPtr[1],"255");
+                 //   Logger::console(" Device: %s value %s", paramPtr[0], paramPtr[1]);
+		
+                    sendMessage(DEVICE_WIFI, ICHIP2128, MSG_SET_PARAM,  paramPtr);	//Send the array to ichip by id (ie 1031)  255 indicates enabled
+                  }
+	    }
+
+	for (int i = 0; i < CFG_DEV_MGR_MAX_DEVICES; i++) {    //Find all devices that are NOT enabled and load into array
+		if (devices[i] && !devices[i]->isEnabled()) 
+                  {    
+                    sprintf(paramPtr[0],"x%X",devices[i]->getId());
+                    sprintf(paramPtr[1],"0");
+                  // Logger::console(" Device: %s value %s", paramPtr[0], paramPtr[1]);
+		    sendMessage(DEVICE_WIFI, ICHIP2128, MSG_SET_PARAM,  paramPtr);        //Send array to ichip by id (ie 1002) 0 indicates disabled     
+                  }
+	  }
+
+       
+}
+
+

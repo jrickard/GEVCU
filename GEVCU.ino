@@ -37,13 +37,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /*
 Random comments on things that should be coded up soon:
-1. Wifi code needs to be finished. It should read in settings from EEPROM, etc. And start up a webserver. Then
-the code should scan for changed parameters occassionally and set them in eeprom
-2. Serial console needs to be able to set the wifi stuff
-3. Most of the support code for precharge based on RC is done. But, it still must be tested. Also, it should
-	check to see if the motor controller reports voltage and make sure the voltage is reported at least up
-	to the set nominal voltage before closing the main contactor. If it takes too long then fault and open
-	everything. Also, open contactors in case of a serious fault (but not for just any fault. Opening contactors under load can be nasty!)
 4. It is a possibility that there should be support for actually controlling the power to some of the devices.
 	For instance, power could be controlled to the +12V connection at the DMOC so that it can be power cycled
 	in software. But, that uses up an input and people can just cycle the key (though that resets the GEVCU too)
@@ -75,18 +68,57 @@ PrefHandler *sysPrefs;
 MemCache *memCache;
 Heartbeat *heartbeat;
 SerialConsole *serialConsole;
+Device *wifiDevice;
+Device *btDevice;
+
 
 byte i = 0;
 
+
+void sendWiReach(char* message)
+{
+  Serial2.println(message);
+    delay(700);
+    while (Serial2.available()) {SerialUSB.write(Serial2.read());}
+}
+
+void initWiReach()
+{
+SerialUSB.begin(115200); // use SerialUSB only as the programming port doesn't work
+Serial2.begin(115200); // use Serial3 for GEVCU2, use Serial2 for GEVCU3+4
+
+sendWiReach("AT+iFD");//Host connection set to serial port
+delay(5000);
+sendWiReach("AT+iHIF=1");//Host connection set to serial port
+sendWiReach("AT+iBDRF=9");//Automatic baud rate on host serial port
+sendWiReach("AT+iRPG=secret"); //Password for iChip wbsite
+sendWiReach("AT+iWPWD=secret");//Password for our website
+sendWiReach("AT+iWST0=0");//Connection security wap/wep/wap2 to no security
+sendWiReach("AT+iWLCH=4");  //Wireless channel
+sendWiReach("AT+iWLSI=GEVCU");//SSID
+sendWiReach("AT+iWSEC=1");//IF security is used, set for WPA2-AES
+sendWiReach("AT+iSTAP=1");//Act as AP
+sendWiReach("AT+iDIP=192.168.3.10");//default ip - must be 10.x.x.x
+sendWiReach("AT+iDPSZ=8");//DHCP pool size
+sendWiReach("AT+iAWS=1");//Website on
+sendWiReach("AT+iDOWN");//Powercycle reset
+delay(5000);
+SerialUSB.println("WiReach Wireless Module Initialized....");
+}
+
+
+  
+
 //initializes all the system EEPROM values. Chances are this should be broken out a bit but
 //there is only one checksum check for all of them so it's simple to do it all here.
+
 void initSysEEPROM() {
 	//three temporary storage places to make saving to EEPROM easy
 	uint8_t eight;
 	uint16_t sixteen;
 	uint32_t thirtytwo;
 
-	eight = SYSTEM_DUED;
+	eight = 4; //GEVCU4 or GEVCU5 boards
 	sysPrefs->write(EESYS_SYSTEM_TYPE, eight);
 
 	sixteen = 1024; //no gain
@@ -120,11 +152,6 @@ void initSysEEPROM() {
 
 	eight = 5; //how many RX mailboxes
 	sysPrefs->write(EESYS_CAN_RX_COUNT, eight);
-
-	eight = 0;
-	sysPrefs->write(EESYS_COOLFAN, eight);
-    sysPrefs->write(EESYS_COOLON, eight);
-    sysPrefs->write(EESYS_COOLOFF, eight);
 
 	thirtytwo = 0x7f0; //standard frame, ignore bottom 4 bits
 	sysPrefs->write(EESYS_CAN_MASK0, thirtytwo);
@@ -182,6 +209,19 @@ void initSysEEPROM() {
 	sysPrefs->saveChecksum();
 }
 
+void createObjects() {
+	PotThrottle *paccelerator = new PotThrottle();
+	CanThrottle *caccelerator = new CanThrottle();
+	PotBrake *pbrake = new PotBrake();
+	CanBrake *cbrake = new CanBrake();
+	DmocMotorController *dmotorController = new DmocMotorController();
+        CodaMotorController *cmotorController = new CodaMotorController();
+	BrusaMotorController *bmotorController = new BrusaMotorController();
+	ThinkBatteryManager *BMS = new ThinkBatteryManager();
+	ELM327Emu *emu = new ELM327Emu();
+	ICHIPWIFI *iChip = new ICHIPWIFI();
+}
+
 void initializeDevices() {
 	DeviceManager *deviceManager = DeviceManager::getInstance();
 
@@ -190,57 +230,12 @@ void initializeDevices() {
 	Logger::info("add: Heartbeat (id: %X, %X)", HEARTBEAT, heartbeat);
 	heartbeat->setup();
 
-	// Specify the shield ADC port(s) to use for throttle
-	// CFG_THROTTLE_NONE = not used (valid only for second value and should not be needed due to calibration/detection)
-	Throttle *paccelerator = new PotThrottle(CFG_THROTTLE1_PIN, CFG_THROTTLE2_PIN);
-	if (paccelerator->isEnabled()) {
-		Logger::info("add device: PotThrottle (id: %X, %X)", POTACCELPEDAL, paccelerator);
-		deviceManager->addDevice(paccelerator);
-	}
-
-	Throttle *caccelerator = new CanThrottle();
-	if (caccelerator->isEnabled()) {
-		Logger::info("add device: CanThrottle (id: %X, %X)", CANACCELPEDAL, caccelerator);
-		deviceManager->addDevice(caccelerator);
-	}
-
-	Throttle *pbrake = new PotBrake(CFG_BRAKE_PIN); //set up the brake input as the third ADC input from the shield.
-	if (pbrake->isEnabled()) {
-		Logger::info("add device: PotBrake (id: %X, %X)", POTBRAKEPEDAL, pbrake);
-		deviceManager->addDevice(pbrake);
-	}
-
-	Throttle *cbrake = new CanBrake();
-	if (cbrake->isEnabled()) {
-		Logger::info("add device: CanBrake (id: %X, %X)", CANBRAKEPEDAL, cbrake);
-		deviceManager->addDevice(cbrake);
-	}
-
-	MotorController *dmotorController = new DmocMotorController(); //instantiate a DMOC645 device controller as our motor controller
-	if (dmotorController->isEnabled()) {
-		Logger::info("add device: DMOC645 (id:%X, %X)", DMOC645, dmotorController);
-		deviceManager->addDevice(dmotorController);
-	}
-
-	MotorController *bmotorController = new BrusaMotorController(); //instantiate a Brusa DMC5 device controller as our motor controller
-	if (bmotorController->isEnabled()) {
-		Logger::info("add device: Brusa DMC5 (id: %X, %X)", BRUSA_DMC5, bmotorController);
-		deviceManager->addDevice(bmotorController);
-	}
-
-	BatteryManager *BMS = new ThinkBatteryManager();
-	if (BMS->isEnabled()) {
-		Logger::info("add device: Th!nk City BMS (id: %X, %X)", THINKBMS, BMS);
-		deviceManager->addDevice(BMS);
-	}
-
-// add wifi as last device, because ICHIPWIFI::loadParameters() depends on pre-loaded preferences
-	Logger::info("Trying WIFI");
-	ICHIPWIFI *iChip = new ICHIPWIFI();
-	if (iChip->isEnabled()) {
-		Logger::info("add device: iChip 2128 WiFi (id: %X, %X)", ICHIP2128, iChip);
-		deviceManager->addDevice(iChip);
-	}
+	/*
+	We used to instantiate all the objects here along with other code. To simplify things this is done somewhat
+	automatically now. Just instantiate your new device object in createObjects above. This takes care of the details
+	so long as you follow the template of how other devices were coded.
+	*/
+	createObjects(); 
 
 	/*
 	 *	We defer setting up the devices until here. This allows all objects to be instantiated
@@ -253,74 +248,52 @@ void initializeDevices() {
 }
 
 void setup() {
-
+        //delay(5000);  //This delay lets you see startup.  But it breaks DMOC645 really badly.  You have to have comm way before 5 seconds.
+       
+        //initWiReach();
 	pinMode(BLINK_LED, OUTPUT);
 	digitalWrite(BLINK_LED, LOW);
-
-	SerialUSB.begin(CFG_SERIAL_SPEED);
+        SerialUSB.begin(CFG_SERIAL_SPEED);
 	SerialUSB.println(CFG_VERSION);
 	SerialUSB.print("Build number: ");
 	SerialUSB.println(CFG_BUILD_NUM);
-
 	Wire.begin();
 	Logger::info("TWI init ok");
-
 	memCache = new MemCache();
 	Logger::info("add MemCache (id: %X, %X)", MEMCACHE, memCache);
 	memCache->setup();
 	sysPrefs = new PrefHandler(SYSTEM);
-	if (!sysPrefs->checksumValid()) {
-		Logger::info("Initializing EEPROM");
-		initSysEEPROM();
-	} else {  //checksum is good, read in the values stored in EEPROM
-		Logger::info("Using existing EEPROM values");
-	}
+	if (!sysPrefs->checksumValid()) 
+            {
+	      Logger::info("Initializing EEPROM");
+	      initSysEEPROM();
+              initWiReach();
+	    } 
+          else {Logger::info("Using existing EEPROM values");}//checksum is good, read in the values stored in EEPROM
 
 	uint8_t loglevel;
 	sysPrefs->read(EESYS_LOG_LEVEL, &loglevel);
 	Logger::setLoglevel((Logger::LogLevel)loglevel);
-
-	sys_early_setup();
-        
+	Logger::setLoglevel((Logger::LogLevel)1);
+	sys_early_setup();     
 	tickHandler = TickHandler::getInstance();
-
 	canHandlerEV = CanHandler::getInstanceEV();
 	canHandlerCar = CanHandler::getInstanceCar();
 	canHandlerEV->initialize();
 	canHandlerCar->initialize();
-
-	//rtc_clock.init();
-	//Now, we have no idea what the real time is but the EEPROM should have stored a time in the past.
-	//It's better than nothing while we try to figure out the proper time.
-	/*
-	 uint32_t temp;
-	 sysPrefs->read(EESYS_RTC_TIME, &temp);
-	 rtc_clock.change_time(temp);
-	 sysPrefs->read(EESYS_RTC_DATE, &temp);
-	 rtc_clock.change_date(temp);
-	 
-	 Logger::info("RTC init ok");
-	 */
-
 	setup_sys_io(); //get calibration data for system IO
 	Logger::info("SYSIO init ok");
 
 	initializeDevices();
-
     serialConsole = new SerialConsole(memCache, heartbeat);
-        
-	Logger::info("System Ready");
 	serialConsole->printMenu();
-#ifdef CFG_TIMER_USE_QUEUING
-	//tickHandler->cleanBuffer(); // remove buffered tick events which clogged up already (might not be necessary)
-#endif
+	wifiDevice = DeviceManager::getInstance()->getDeviceByID(ICHIP2128);
+	btDevice = DeviceManager::getInstance()->getDeviceByID(ELM327EMU);
+    DeviceManager::getInstance()->sendMessage(DEVICE_WIFI, ICHIP2128, MSG_CONFIG_CHANGE, NULL); //Load configuration variables into WiFi Web Configuration screen
+	Logger::info("System Ready");
 }
 
 void loop() {
-
-	Device *tempDevice;
-	tempDevice = DeviceManager::getInstance()->getDeviceByID(ICHIP2128);
-
 
 #ifdef CFG_TIMER_USE_QUEUING
 	tickHandler->process();
@@ -331,10 +304,14 @@ void loop() {
 	canHandlerCar->process();
 
 	serialConsole->loop();
-
-	if ( tempDevice != NULL ) {
-		((ICHIPWIFI*)tempDevice)->loop();
+	//TODO: this is dumb... shouldn't have to manually do this. Devices should be able to register loop functions
+	if ( wifiDevice != NULL ) {
+		((ICHIPWIFI*)wifiDevice)->loop();
 	}
+
+	//if (btDevice != NULL) {
+	//	((ELM327Emu*)btDevice)->loop();
+	//}
 
 	//this should still be here. It checks for a flag set during an interrupt
 	sys_io_adc_poll();
