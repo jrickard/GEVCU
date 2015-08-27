@@ -43,8 +43,6 @@ template<class T> inline Print &operator <<(Print &obj, T arg) { obj.print(arg);
 long mss;
 extern bool runThrottle; 
 const uint8_t swizzleTable[] = { 0xAA, 0x7F, 0xFE, 0x29, 0x52, 0xA4, 0x9D, 0xEF, 0xB, 0x16, 0x2C, 0x58, 0xB0, 0x60, 0xC0, 1 };
-
-
 	
 CodaMotorController::CodaMotorController() : MotorController() 
 {
@@ -57,7 +55,6 @@ CodaMotorController::CodaMotorController() : MotorController()
     commonName = "Coda UQM Powerphase 100 Inverter";
   
 }
-
 
 void CodaMotorController::setup() 
 {
@@ -139,8 +136,6 @@ void CodaMotorController::handleCanFrame(CAN_FRAME *frame)
 	}
 }
 
-
-
 void CodaMotorController::handleTick() {
   
 	MotorController::handleTick(); //kick the ball up to papa
@@ -158,7 +153,6 @@ void CodaMotorController::handleTick() {
           online=false;//This flag will be set to true by received frames      
         
 }
-
 
 /*
 UQM only HAS a single command CAN bus frame - address 0x204  Everything is stuffed into this one frame. It has a 5 byte payload.
@@ -238,7 +232,6 @@ output.data.bytes[1],output.data.bytes[2],output.data.bytes[3],output.data.bytes
           
 }
 
-
 void CodaMotorController::sendCmd2() {
 	CodaMotorControllerConfiguration *config = (CodaMotorControllerConfiguration *)getConfiguration();
 	
@@ -289,7 +282,6 @@ void CodaMotorController::loadConfiguration() {
 	}
 
 	MotorController::loadConfiguration(); // call parent
-
 }
 
 void CodaMotorController::saveConfiguration() {
@@ -317,8 +309,6 @@ uint8_t CodaMotorController::genCodaCRC(uint8_t cmd, uint8_t torq_lsb, uint8_t t
           }
     return (crc);
 }
-
-
 
 void CodaMotorController::timestamp()
 {
