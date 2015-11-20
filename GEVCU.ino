@@ -7,7 +7,7 @@
  New, new plan: Allow for an arbitrary # of devices that can have both tick and canbus handlers. These devices register themselves
  into the handler framework and specify which sort of device they are. They can have custom tick intervals and custom can filters.
  The system automatically manages when to call the tick handlers and automatically filters canbus and sends frames to the devices.
- There is a facility to send data between devices by targetting a certain type of device. For instance, a motor controller
+ There is a facility to send data between devices by targeting a certain type of device. For instance, a motor controller
  can ask for any throttles and then retrieve the current throttle position from them.
 
 Copyright (c) 2013 Collin Kidder, Michael Neuweiler, Charles Galpin
@@ -33,34 +33,17 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
  */
  
-/*Changelog removed. All changes are logged to GIT */
-
-/*
-Random comments on things that should be coded up soon:
-4. It is a possibility that there should be support for actually controlling the power to some of the devices.
-	For instance, power could be controlled to the +12V connection at the DMOC so that it can be power cycled
-	in software. But, that uses up an input and people can just cycle the key (though that resets the GEVCU too)
-5. Some people (like me, Collin) have a terrible habit of mixing several coding styles. It would be beneficial to
-	continue to harmonize the source code - Perhaps use a tool to do this.
-6. It should be possible to limit speed and/or torque in reverse so someone doesn't kill themselves or someone else
-	while gunning it in reverse - The configuration variable is there and settable now. Just need to integrate it.
-7. The DMOC code duplicates a bunch of functionality that the base class also used to implement. We've got to figure
-	out where the overlaps are and fix it up so that as much as possible is done generically at the base MotorController
-	class and not directly in the Dmoc class.
-*/
-
 #include "GEVCU.h"
 
 // The following includes are required in the .ino file by the Arduino IDE in order to properly
 // identify the required libraries for the build.
+
 #include <due_rtc.h>
 #include <due_can.h>
 #include <due_wire.h>
 #include <DueTimer.h>
 
-//RTC_clock rtc_clock(XTAL); //init RTC with the external 32k crystal as a reference
-
-//Evil, global variables
+//Instantiate objects
 CanHandler *canHandlerEV;
 CanHandler *canHandlerCar;
 TickHandler *tickHandler;
@@ -71,9 +54,90 @@ SerialConsole *serialConsole;
 Device *wifiDevice;
 Device *btDevice;
 
-
-
 byte i = 0;
+
+void setup() 
+{    
+  //initWiReach();
+  initializeOutputs();
+  pinMode(BLINK_LED, OUTPUT);
+  digitalWrite(BLINK_LED, LOW);
+  SerialUSB.begin(CFG_SERIAL_SPEED);
+  SerialUSB.println(CFG_VERSION);
+  SerialUSB.print("Build number: ");
+  SerialUSB.println(CFG_BUILD_NUM);
+  Wire.begin();
+  Logger::info("TWI init ok");
+  memCache = new MemCache();
+  Logger::info("add MemCache (id: %X, %X)", MEMCACHE, memCache);
+  memCache->setup();
+  sysPrefs = new PrefHandler(SYSTEM);
+  
+  if (!sysPrefs->checksumValid()) 
+     {
+      Logger::info("Initializing EEPROM");
+      initSysEEPROM();
+       // initWiReach();
+      } 
+     else {Logger::info("Using existing EEPROM values");}//checksum is good, read in the values stored in EEPROM
+
+  uint8_t loglevel;
+  sysPrefs->read(EESYS_LOG_LEVEL, &loglevel);
+  Logger::setLoglevel((Logger::LogLevel)loglevel);
+  Logger::setLoglevel((Logger::LogLevel)1);
+  sys_early_setup();     
+  tickHandler = TickHandler::getInstance();
+  canHandlerEV = CanHandler::getInstanceEV();
+  canHandlerCar = CanHandler::getInstanceCar();
+  canHandlerEV->initialize();
+  canHandlerCar->initialize();
+  setup_sys_io(); //get calibration data for system IO
+  Logger::info("SYSIO init ok");
+
+  initializeDevices();
+  serialConsole = new SerialConsole(memCache, heartbeat);
+  Logger::info("System Ready");
+  serialConsole->printMenu();
+  wifiDevice = DeviceManager::getInstance()->getDeviceByID(ICHIP2128);
+  btDevice = DeviceManager::getInstance()->getDeviceByID(ELM327EMU);
+  DeviceManager::getInstance()->sendMessage(DEVICE_WIFI, ICHIP2128, MSG_CONFIG_CHANGE, NULL); //Load configuration 
+        //variables into WiFi Web Configuration screen
+
+}
+
+void loop() 
+{
+
+   watchdogReset(); //comment this out to test the watchdog
+
+#ifdef CFG_TIMER_USE_QUEUING
+  tickHandler->process();
+#endif
+
+  // check if incoming frames are available in the can buffer and process them
+  canHandlerEV->process();
+  canHandlerCar->process();
+
+  serialConsole->loop();
+  //TODO: this is dumb... shouldn't have to manually do this. Devices should be able to register loop functions
+  if ( wifiDevice != NULL ) {
+    ((ICHIPWIFI*)wifiDevice)->loop();
+  }
+
+  //if (btDevice != NULL) {
+  //  ((ELM327Emu*)btDevice)->loop();
+  //}
+
+  //this should still be here. It checks for a flag set during an interrupt
+  sys_io_adc_poll();
+}
+
+
+
+void watchdogSetup()
+{
+   watchdogEnable(1024);
+}
 
 
 void sendWiReach(char* message)
@@ -210,24 +274,25 @@ void initSysEEPROM() {
 	sysPrefs->saveChecksum();
 }
 
-void createObjects() {
+void createObjects() 
+{
 	PotThrottle *paccelerator = new PotThrottle();
 	CanThrottle *caccelerator = new CanThrottle();
 	PotBrake *pbrake = new PotBrake();
 	CanBrake *cbrake = new CanBrake();
 	DmocMotorController *dmotorController = new DmocMotorController();
-        CodaMotorController *cmotorController = new CodaMotorController();
-        DCDCController *dcdcController = new DCDCController();
+  CodaMotorController *cmotorController = new CodaMotorController();
+  DCDCController *dcdcController = new DCDCController();
 	BrusaMotorController *bmotorController = new BrusaMotorController();
 	ThinkBatteryManager *BMS = new ThinkBatteryManager();
 	ELM327Emu *emu = new ELM327Emu();
 	ICHIPWIFI *iChip = new ICHIPWIFI();
-        EVIC *eVIC = new EVIC();
+  EVIC *eVIC = new EVIC();
 }
-     void initializeDevices() {
-	DeviceManager *deviceManager = DeviceManager::getInstance();
 
-	//heartbeat is always enabled now
+void initializeDevices()
+{
+	DeviceManager *deviceManager = DeviceManager::getInstance();
 	heartbeat = new Heartbeat();
 	Logger::info("add: Heartbeat (id: %X, %X)", HEARTBEAT, heartbeat);
 	heartbeat->setup();
@@ -249,76 +314,26 @@ void createObjects() {
 
 }
 
-void setup() {
-        //delay(5000);  //This delay lets you see startup.  But it breaks DMOC645 really badly.  You have to have comm way before 5 seconds.
-       
-        //initWiReach();
-	pinMode(BLINK_LED, OUTPUT);
-	digitalWrite(BLINK_LED, LOW);
-        SerialUSB.begin(CFG_SERIAL_SPEED);
-	SerialUSB.println(CFG_VERSION);
-	SerialUSB.print("Build number: ");
-	SerialUSB.println(CFG_BUILD_NUM);
-	Wire.begin();
-	Logger::info("TWI init ok");
-	memCache = new MemCache();
-	Logger::info("add MemCache (id: %X, %X)", MEMCACHE, memCache);
-	memCache->setup();
-	sysPrefs = new PrefHandler(SYSTEM);
-	if (!sysPrefs->checksumValid()) 
-            {
-	      Logger::info("Initializing EEPROM");
-	      initSysEEPROM();
-             // initWiReach();
-	    } 
-          else {Logger::info("Using existing EEPROM values");}//checksum is good, read in the values stored in EEPROM
-
-	uint8_t loglevel;
-	sysPrefs->read(EESYS_LOG_LEVEL, &loglevel);
-	Logger::setLoglevel((Logger::LogLevel)loglevel);
-	Logger::setLoglevel((Logger::LogLevel)1);
-	sys_early_setup();     
-	tickHandler = TickHandler::getInstance();
-	canHandlerEV = CanHandler::getInstanceEV();
-	canHandlerCar = CanHandler::getInstanceCar();
-	canHandlerEV->initialize();
-	canHandlerCar->initialize();
-	setup_sys_io(); //get calibration data for system IO
-	Logger::info("SYSIO init ok");
-
-	initializeDevices();
-        serialConsole = new SerialConsole(memCache, heartbeat);
-	Logger::info("System Ready");
-	serialConsole->printMenu();
-	wifiDevice = DeviceManager::getInstance()->getDeviceByID(ICHIP2128);
-	btDevice = DeviceManager::getInstance()->getDeviceByID(ELM327EMU);
-        DeviceManager::getInstance()->sendMessage(DEVICE_WIFI, ICHIP2128, MSG_CONFIG_CHANGE, NULL); //Load configuration 
-        //variables into WiFi Web Configuration screen
-
-}
-
-void loop() {
-
-#ifdef CFG_TIMER_USE_QUEUING
-	tickHandler->process();
-#endif
-
-	// check if incoming frames are available in the can buffer and process them
-	canHandlerEV->process();
-	canHandlerCar->process();
-
-	serialConsole->loop();
-	//TODO: this is dumb... shouldn't have to manually do this. Devices should be able to register loop functions
-	if ( wifiDevice != NULL ) {
-		((ICHIPWIFI*)wifiDevice)->loop();
-	}
-
-	//if (btDevice != NULL) {
-	//	((ELM327Emu*)btDevice)->loop();
-	//}
-
-	//this should still be here. It checks for a flag set during an interrupt
-	sys_io_adc_poll();
+void initializeOutputs()
+{
+  /*  AMPSEAL   ARDUINO
+       3       D4
+       4       D5
+       5       D6
+       6       D7
+       15      D2
+       16      D3
+       17      D8
+       18      D9
+*/
+  uint8_t i=10;
+  while(--i >1)
+    {
+     pinMode(i, INPUT);   //In the case of regenerative braking, this turns our brake light output AMPSEAL pin 3 ON.
+     pinMode(i, OUTPUT);   //In the case of regenerative braking, this turns our brake light output AMPSEAL pin 3 ON.
+     digitalWrite(i,LOW);
+    }
+ 
 }
 
 
