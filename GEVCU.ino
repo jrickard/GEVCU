@@ -329,9 +329,9 @@ void initializeOutputs()
   uint8_t i=10;
   while(--i >1)
     {
-     pinMode(i, INPUT);   //In the case of regenerative braking, this turns our brake light output AMPSEAL pin 3 ON.
-     pinMode(i, OUTPUT);   //In the case of regenerative braking, this turns our brake light output AMPSEAL pin 3 ON.
-     digitalWrite(i,LOW);
+     pinMode(i, INPUT);   //Turn on clock to enable digitalRead
+     pinMode(i, OUTPUT);   //Set output to work as an output
+     digitalWrite(i,LOW);  // Initialize it OFF.
     }
  
 }
