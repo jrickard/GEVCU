@@ -19,13 +19,16 @@ ArduinoDue branch is more experimental than the master branch and includes the w
 
 The WIP branch is sync'd to EVTV's official changes and as such could be considered as a testing ground for the official source code distribution.
 
+#### Requirements: 
+
 You will need the following to have any hope of compiling and running the firmware:
-- A GEVCU board. Versions from 2 and up are supported.
-- Arduino IDE 1.5.4 - Do not use newer versions of the IDE
-- due_can library - There is a repo for this under Collin80
-- due_rtc library - Also under Collin80
-- due_wire library - once again
-- DueTimer library - and again
+
+- [A GEVCU board](http://store.evtv.me/proddetail.php?prod=gevcu&cat=28) - Versions from 2 and up are supported.
+- [Arduino IDE 1.5.4](https://www.arduino.cc/en/Main/OldSoftwareReleases#previous) - Do not use newer versions of the IDE
+- [due_can library](https://github.com/collin80/due_can) - Object oriented canbus library for Arduino Due compatible boards.
+- [due_rtc library](https://github.com/collin80/due_rtc) - RTC Library for the Arduino Due.
+- [due_wire library](https://github.com/collin80/due_wire) - An alternative I2C library for Due with DMA support.
+- [DueTimer library](https://github.com/ivanseidel/DueTimer) -  Timer Library fully implemented for Arduino DUE.
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
@@ -35,6 +38,8 @@ The canbus is supposed to be terminated on both ends of the bus. If you are test
 If you are using a custom board then add a terminating resistor. 
 
 If you are using the new prototype shield then it should already be terminated. The DMOC can be terminated by soldering a 120 ohm resistor between the canbus lines. I did this on my DMOC and hid the resistor inside the plug shroud. 
+
+#### License: 
 
 This software is MIT licensed:
 
